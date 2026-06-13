@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>梦境碎片收集系统</title>
-  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <script src="vue.global.prod.js"></script>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -43,6 +43,24 @@
       </header>
 
       <main class="content">
+        <div v-if="todayFollowUps.length > 0" class="card followup-card">
+          <h2>🔔 今日回访计划 ({{ todayFollowUps.length }})</h2>
+          <div class="followup-list">
+            <div v-for="dream in todayFollowUps" :key="'fup-' + dream.id" class="followup-item">
+              <div class="followup-content">
+                <div class="followup-date">记录于 {{ dream.date }}</div>
+                <div class="followup-text">"{{ dream.content }}"</div>
+                <div class="followup-lucidity">
+                  清醒度: <span v-for="n in 5" :key="n" class="star">{{ n <= dream.lucidity ? '★' : '☆' }}</span>
+                </div>
+              </div>
+              <button class="btn-followup-complete" @click="markFollowedUp(dream.id)">
+                ✅ 已回访
+              </button>
+            </div>
+          </div>
+        </div>
+
         <div class="stats-header">
           <h2 class="section-title">📊 月度统计</h2>
           <div class="stats-selector">
@@ -94,6 +112,10 @@
               <input v-model="newDream.date" type="date">
             </div>
             <div class="form-group">
+              <label>回访日期（可选）</label>
+              <input v-model="newDream.followUpDate" type="date">
+            </div>
+            <div class="form-group">
               <label>清醒度</label>
               <div class="star-rating">
                 <span
@@ -117,7 +139,7 @@
           <h2>📚 梦境列表</h2>
           <div v-if="dreams.length === 0" class="empty-dream">还没有记录梦境</div>
           <div v-else class="dream-list">
-            <div v-for="dream in dreams" :key="dream.id" class="dream-item">
+            <div v-for="dream in dreams" :key="dream.id" class="dream-item" :class="{ 'dream-followed': dream.followedUp }">
               <div class="dream-header">
                 <span class="dream-date">{{ dream.date }}</span>
                 <span class="dream-lucidity">
@@ -125,6 +147,44 @@
                 </span>
               </div>
               <div class="dream-text">{{ dream.content }}</div>
+              <div class="dream-footer">
+                <div v-if="dream.followedUp" class="followup-badge followed">
+                  ✅ 已于 {{ dream.followedUpAt }} 回访
+                </div>
+                <div v-else-if="dream.followUpDate" class="followup-badge pending">
+                  📅 回访日期: {{ dream.followUpDate }}
+                  <button class="btn-clear-followup" @click="clearFollowUp(dream.id)">×</button>
+                </div>
+                <div class="followup-actions">
+                  <input
+                    v-if="editingFollowUpId === dream.id"
+                    v-model="editingFollowUpDate"
+                    type="date"
+                    class="followup-date-input"
+                    :min="minDate"
+                  >
+                  <button
+                    v-if="editingFollowUpId === dream.id"
+                    class="btn-small btn-primary-small"
+                    @click="saveFollowUpDate(dream.id)"
+                  >保存</button>
+                  <button
+                    v-if="editingFollowUpId === dream.id"
+                    class="btn-small btn-outline-small"
+                    @click="cancelFollowUpEdit"
+                  >取消</button>
+                  <button
+                    v-if="editingFollowUpId !== dream.id && !dream.followedUp"
+                    class="btn-small btn-outline-small"
+                    @click="startEditFollowUp(dream)"
+                  >📅 设置回访</button>
+                  <button
+                    v-if="dream.followUpDate && !dream.followedUp && dream.followUpDate <= todayStr"
+                    class="btn-small btn-complete"
+                    @click="markFollowedUp(dream.id)"
+                  >✅ 标记已回访</button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

@@ -6,7 +6,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
 const app = express();
-const PORT = 3001;
+const PORT = 3110;
 const JWT_SECRET = 'dream-secret-key-2024';
 
 const DATA_DIR = path.join(__dirname, 'data');
@@ -54,48 +54,68 @@ function initUsers() {
 function initDreams() {
   const dreams = readJSON(DREAMS_FILE);
   if (dreams.length === 0) {
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
     const sampleDreams = [
       {
         id: 1,
         userId: 1,
         content: '在一片紫色的云海中漂浮，远处有一座发光的水晶城堡，城堡的塔尖直插云霄。',
         lucidity: 5,
-        date: '2026-06-01'
+        date: '2026-06-01',
+        followUpDate: todayStr,
+        followedUp: false,
+        followedUpAt: null
       },
       {
         id: 2,
         userId: 1,
         content: '梦见自己变成了一只鸟，在城市上空飞翔，下面的人群像蚂蚁一样小。',
         lucidity: 3,
-        date: '2026-06-05'
+        date: '2026-06-05',
+        followUpDate: todayStr,
+        followedUp: false,
+        followedUpAt: null
       },
       {
         id: 3,
         userId: 1,
         content: '在海底漫步，周围是五颜六色的珊瑚和会发光的鱼，我可以在水中呼吸。',
         lucidity: 4,
-        date: '2026-06-10'
+        date: '2026-06-10',
+        followUpDate: null,
+        followedUp: false,
+        followedUpAt: null
       },
       {
         id: 4,
         userId: 1,
         content: '梦见了很久没见的老朋友，我们在一片向日葵花田里聊天。',
         lucidity: 2,
-        date: '2026-05-20'
+        date: '2026-05-20',
+        followUpDate: null,
+        followedUp: false,
+        followedUpAt: null
       },
       {
         id: 5,
         userId: 1,
         content: '在太空里行走，地球就在脚下，星星近得伸手就能摸到。',
         lucidity: 5,
-        date: '2026-05-15'
+        date: '2026-05-15',
+        followUpDate: null,
+        followedUp: true,
+        followedUpAt: '2026-06-08'
       },
       {
         id: 6,
         userId: 1,
         content: '梦见自己在图书馆里，每本书打开都会飞出不同颜色的蝴蝶。',
         lucidity: 4,
-        date: '2026-06-12'
+        date: '2026-06-12',
+        followUpDate: null,
+        followedUp: false,
+        followedUpAt: null
       }
     ];
     writeJSON(DREAMS_FILE, sampleDreams);
@@ -141,7 +161,7 @@ app.get('/api/dreams', authenticateToken, (req, res) => {
 });
 
 app.post('/api/dreams', authenticateToken, (req, res) => {
-  const { content, lucidity, date } = req.body;
+  const { content, lucidity, date, followUpDate } = req.body;
   if (!content || !lucidity || !date) {
     return res.status(400).json({ error: '内容、清醒度和日期必填' });
   }
@@ -152,7 +172,10 @@ app.post('/api/dreams', authenticateToken, (req, res) => {
     userId: req.user.id,
     content,
     lucidity: parseInt(lucidity),
-    date
+    date,
+    followUpDate: followUpDate || null,
+    followedUp: false,
+    followedUpAt: null
   };
 
   dreams.push(newDream);
@@ -167,6 +190,53 @@ app.get('/api/dreams/random', authenticateToken, (req, res) => {
   }
   const randomDream = userDreams[Math.floor(Math.random() * userDreams.length)];
   res.json(randomDream);
+});
+
+app.get('/api/dreams/followups/today', authenticateToken, (req, res) => {
+  const today = new Date().toISOString().split('T')[0];
+  const userDreams = readJSON(DREAMS_FILE).filter(d =>
+    d.userId === req.user.id &&
+    d.followUpDate === today &&
+    d.followedUp === false
+  );
+  res.json(userDreams.sort((a, b) => new Date(b.date) - new Date(a.date)));
+});
+
+app.put('/api/dreams/:id/followup', authenticateToken, (req, res) => {
+  const dreamId = parseInt(req.params.id);
+  const { followUpDate } = req.body;
+  const dreams = readJSON(DREAMS_FILE);
+  const dreamIndex = dreams.findIndex(d => d.id === dreamId && d.userId === req.user.id);
+
+  if (dreamIndex === -1) {
+    return res.status(404).json({ error: '梦境不存在' });
+  }
+
+  dreams[dreamIndex].followUpDate = followUpDate || null;
+  if (!followUpDate) {
+    dreams[dreamIndex].followedUp = false;
+    dreams[dreamIndex].followedUpAt = null;
+  } else if (followUpDate > dreams[dreamIndex].followUpDate) {
+    dreams[dreamIndex].followedUp = false;
+    dreams[dreamIndex].followedUpAt = null;
+  }
+  writeJSON(DREAMS_FILE, dreams);
+  res.json(dreams[dreamIndex]);
+});
+
+app.put('/api/dreams/:id/followup/complete', authenticateToken, (req, res) => {
+  const dreamId = parseInt(req.params.id);
+  const dreams = readJSON(DREAMS_FILE);
+  const dreamIndex = dreams.findIndex(d => d.id === dreamId && d.userId === req.user.id);
+
+  if (dreamIndex === -1) {
+    return res.status(404).json({ error: '梦境不存在' });
+  }
+
+  dreams[dreamIndex].followedUp = true;
+  dreams[dreamIndex].followedUpAt = new Date().toISOString().split('T')[0];
+  writeJSON(DREAMS_FILE, dreams);
+  res.json(dreams[dreamIndex]);
 });
 
 app.get('/api/stats/monthly', authenticateToken, (req, res) => {

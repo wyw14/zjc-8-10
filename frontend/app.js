@@ -1,6 +1,6 @@
 const { createApp, ref, onMounted, computed } = Vue;
 
-const API_BASE = 'http://localhost:3001/api';
+const API_BASE = 'http://localhost:3110/api';
 
 createApp({
   setup() {
@@ -15,6 +15,11 @@ createApp({
     const dreams = ref([]);
     const randomDream = ref(null);
     const monthlyStats = ref({ count: 0, avgLucidity: 0 });
+    const todayFollowUps = ref([]);
+    const editingFollowUpId = ref(null);
+    const editingFollowUpDate = ref('');
+    const todayStr = new Date().toISOString().split('T')[0];
+    const minDate = todayStr;
 
     const now = new Date();
     const selectedYear = ref(now.getFullYear());
@@ -31,7 +36,8 @@ createApp({
     const newDream = ref({
       content: '',
       lucidity: 3,
-      date: new Date().toISOString().split('T')[0]
+      date: new Date().toISOString().split('T')[0],
+      followUpDate: ''
     });
 
     const isPlaying = ref(false);
@@ -179,9 +185,69 @@ createApp({
         newDream.value = {
           content: '',
           lucidity: 3,
-          date: new Date().toISOString().split('T')[0]
+          date: new Date().toISOString().split('T')[0],
+          followUpDate: ''
         };
 
+        loadData();
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    async function fetchTodayFollowUps() {
+      try {
+        const data = await apiRequest('/dreams/followups/today');
+        todayFollowUps.value = data;
+      } catch (e) {
+        console.error('获取今日回访失败', e);
+      }
+    }
+
+    async function markFollowedUp(dreamId) {
+      try {
+        await apiRequest(`/dreams/${dreamId}/followup/complete`, {
+          method: 'PUT'
+        });
+        loadData();
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    function startEditFollowUp(dream) {
+      editingFollowUpId.value = dream.id;
+      editingFollowUpDate.value = dream.followUpDate || todayStr;
+    }
+
+    function cancelFollowUpEdit() {
+      editingFollowUpId.value = null;
+      editingFollowUpDate.value = '';
+    }
+
+    async function saveFollowUpDate(dreamId) {
+      if (!editingFollowUpDate.value) {
+        cancelFollowUpEdit();
+        return;
+      }
+      try {
+        await apiRequest(`/dreams/${dreamId}/followup`, {
+          method: 'PUT',
+          body: JSON.stringify({ followUpDate: editingFollowUpDate.value })
+        });
+        cancelFollowUpEdit();
+        loadData();
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    async function clearFollowUp(dreamId) {
+      try {
+        await apiRequest(`/dreams/${dreamId}/followup`, {
+          method: 'PUT',
+          body: JSON.stringify({ followUpDate: null })
+        });
         loadData();
       } catch (e) {
         alert(e.message);
@@ -191,6 +257,7 @@ createApp({
     function loadData() {
       fetchDreams();
       fetchMonthlyStats();
+      fetchTodayFollowUps();
     }
 
     function createWhiteNoise() {
@@ -276,7 +343,17 @@ createApp({
       selectedYear,
       selectedMonth,
       yearOptions,
-      onMonthChange
+      onMonthChange,
+      todayFollowUps,
+      markFollowedUp,
+      editingFollowUpId,
+      editingFollowUpDate,
+      todayStr,
+      minDate,
+      startEditFollowUp,
+      saveFollowUpDate,
+      cancelFollowUpEdit,
+      clearFollowUp
     };
   }
 }).mount('#app');
