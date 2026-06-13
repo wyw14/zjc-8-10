@@ -39,6 +39,19 @@ function writeJSON(filePath, data) {
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
 }
 
+function getLocalDateStr(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function isValidDateStr(str) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(str)) return false;
+  const d = new Date(str);
+  return d instanceof Date && !isNaN(d) && getLocalDateStr(d) === str;
+}
+
 function initUsers() {
   const users = readJSON(USERS_FILE);
   if (users.length === 0) {
@@ -54,8 +67,7 @@ function initUsers() {
 function initDreams() {
   const dreams = readJSON(DREAMS_FILE);
   if (dreams.length === 0) {
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
+    const todayStr = getLocalDateStr();
     const sampleDreams = [
       {
         id: 1,
@@ -166,6 +178,20 @@ app.post('/api/dreams', authenticateToken, (req, res) => {
     return res.status(400).json({ error: '内容、清醒度和日期必填' });
   }
 
+  if (!isValidDateStr(date)) {
+    return res.status(400).json({ error: '日期格式不正确，应为 YYYY-MM-DD' });
+  }
+
+  if (followUpDate !== null && followUpDate !== undefined && followUpDate !== '') {
+    if (!isValidDateStr(followUpDate)) {
+      return res.status(400).json({ error: '回访日期格式不正确，应为 YYYY-MM-DD' });
+    }
+    const todayStr = getLocalDateStr();
+    if (followUpDate < todayStr) {
+      return res.status(400).json({ error: '回访日期不能早于今天' });
+    }
+  }
+
   const dreams = readJSON(DREAMS_FILE);
   const newDream = {
     id: dreams.length > 0 ? Math.max(...dreams.map(d => d.id)) + 1 : 1,
@@ -193,10 +219,10 @@ app.get('/api/dreams/random', authenticateToken, (req, res) => {
 });
 
 app.get('/api/dreams/followups/today', authenticateToken, (req, res) => {
-  const today = new Date().toISOString().split('T')[0];
+  const todayStr = getLocalDateStr();
   const userDreams = readJSON(DREAMS_FILE).filter(d =>
     d.userId === req.user.id &&
-    d.followUpDate === today &&
+    d.followUpDate === todayStr &&
     d.followedUp === false
   );
   res.json(userDreams.sort((a, b) => new Date(b.date) - new Date(a.date)));
@@ -212,14 +238,26 @@ app.put('/api/dreams/:id/followup', authenticateToken, (req, res) => {
     return res.status(404).json({ error: '梦境不存在' });
   }
 
-  dreams[dreamIndex].followUpDate = followUpDate || null;
-  if (!followUpDate) {
-    dreams[dreamIndex].followedUp = false;
-    dreams[dreamIndex].followedUpAt = null;
-  } else if (followUpDate > dreams[dreamIndex].followUpDate) {
+  if (followUpDate !== null && followUpDate !== undefined && followUpDate !== '') {
+    if (!isValidDateStr(followUpDate)) {
+      return res.status(400).json({ error: '回访日期格式不正确，应为 YYYY-MM-DD' });
+    }
+    const todayStr = getLocalDateStr();
+    if (followUpDate < todayStr) {
+      return res.status(400).json({ error: '回访日期不能早于今天' });
+    }
+    const originalFollowUpDate = dreams[dreamIndex].followUpDate;
+    dreams[dreamIndex].followUpDate = followUpDate;
+    if (followUpDate !== originalFollowUpDate) {
+      dreams[dreamIndex].followedUp = false;
+      dreams[dreamIndex].followedUpAt = null;
+    }
+  } else {
+    dreams[dreamIndex].followUpDate = null;
     dreams[dreamIndex].followedUp = false;
     dreams[dreamIndex].followedUpAt = null;
   }
+
   writeJSON(DREAMS_FILE, dreams);
   res.json(dreams[dreamIndex]);
 });
@@ -234,7 +272,7 @@ app.put('/api/dreams/:id/followup/complete', authenticateToken, (req, res) => {
   }
 
   dreams[dreamIndex].followedUp = true;
-  dreams[dreamIndex].followedUpAt = new Date().toISOString().split('T')[0];
+  dreams[dreamIndex].followedUpAt = getLocalDateStr();
   writeJSON(DREAMS_FILE, dreams);
   res.json(dreams[dreamIndex]);
 });

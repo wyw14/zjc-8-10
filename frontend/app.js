@@ -2,6 +2,13 @@ const { createApp, ref, onMounted, computed } = Vue;
 
 const API_BASE = 'http://localhost:3110/api';
 
+function getLocalDateStr(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 createApp({
   setup() {
     const isLoggedIn = ref(false);
@@ -18,7 +25,7 @@ createApp({
     const todayFollowUps = ref([]);
     const editingFollowUpId = ref(null);
     const editingFollowUpDate = ref('');
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = getLocalDateStr();
     const minDate = todayStr;
 
     const now = new Date();
@@ -36,7 +43,7 @@ createApp({
     const newDream = ref({
       content: '',
       lucidity: 3,
-      date: new Date().toISOString().split('T')[0],
+      date: getLocalDateStr(),
       followUpDate: ''
     });
 
@@ -185,7 +192,7 @@ createApp({
         newDream.value = {
           content: '',
           lucidity: 3,
-          date: new Date().toISOString().split('T')[0],
+          date: getLocalDateStr(),
           followUpDate: ''
         };
 
